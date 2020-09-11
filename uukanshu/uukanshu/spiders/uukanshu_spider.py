@@ -11,17 +11,24 @@ class UUKanShuSpdier(scrapy.Spider):
     def start_requests(self):
         # get url from cli args
         url = self.settings.get('START_URL')
-        yield scrapy.Request(url=url, callback=self.parse)
+        chapter = self.settings.get('CHAPTER', 1)
+        req = scrapy.Request(url=url, callback=self.parse)
+        req.meta['chapter'] = chapter
+        yield req
 
     def parse(self, response):
+        chapter = response.meta.get('chapter', 1)
+        chapter = int(chapter)
+
         item = UUKanShuItem()
         cur_url = response.url
         item['url'] = cur_url
 
         title = response.xpath(u'//*[@id="timu"]/text()').extract()
         if title:
-            title = [i.strip() for i in title]
-            item['title'] = title[0]
+            title = [i.strip() for i in title][0]
+            title = u'第' + str(chapter) + u'章' + ' ' + title
+            item['title'] = title
 
         content = self._process_content(response)
         item['content'] = content
@@ -38,6 +45,7 @@ class UUKanShuSpdier(scrapy.Spider):
                 if cur_page < total_page:
                     req = scrapy.Request(url=next_url, callback=self.parse)
                     req.meta['cur_page'] = cur_page + 1
+                    req.meta['chapter'] = chapter + 1
                     yield req
         yield item
         self._write_to_txt(item)
@@ -76,6 +84,6 @@ class UUKanShuSpdier(scrapy.Spider):
     def _write_to_txt(self, item):
         filename = self.settings.get('FILENAME', 'novel.txt')
         with open(filename, 'a+') as f:
-            f.write(item['title'] + os.linesep)
+            f.write(os.linesep + item['title'] + os.linesep)
             f.write(item['url'] + os.linesep)
             f.write(item['content'])
